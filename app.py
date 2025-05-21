@@ -89,28 +89,28 @@ if df is not None and not df.empty:
 
     # Sliders to adjust parameters
     st.sidebar.header("Base Score Parameters")
-    temp_opt = st.sidebar.slider("Temp Optimum", 40, 100, 70)
-    width_lo = st.sidebar.slider("Width Low", 5, 30, 20)
-    width_hi = st.sidebar.slider("Width High", 5, 30, 15)
+    temp_opt = st.sidebar.slider("Temp Optimum", 40, 100, 68)
+    width_lo = st.sidebar.slider("Width Low", 5, 30, 26)
+    width_hi = st.sidebar.slider("Width High", 5, 30, 23)
 
     st.sidebar.header("Wind Adj Parameters")
     wind_tmin = 50
     wind_tmax = 70
-    wind_scale = st.sidebar.slider("Cool Wind Penalty", 0, 50, 20)
-    wind_decay = st.sidebar.slider("Cool Decay", 1, 20, 5) / 100
+    wind_scale = st.sidebar.slider("Cool Wind Penalty", 0, 50, 14)
+    wind_decay = st.sidebar.slider("Cool Decay", 1, 20, 4) / 100
     warm_ideal = st.sidebar.slider("Warm Wind Ideal", 0, 20, 10)
-    warm_width = st.sidebar.slider("Warm Wind Width", 1, 20, 5)
-    warm_scale = st.sidebar.slider("Warm Wind Scale", 0, 50, 20)
+    warm_width = st.sidebar.slider("Warm Wind Width", 1, 20, 6)
+    warm_scale = st.sidebar.slider("Warm Wind Scale", 0, 50, 12)
 
     st.sidebar.header("Cloud Adj Parameters")
     cloud_min = st.sidebar.slider("Min Cloud Adj Scale", 0, 20, 7)
-    cloud_max = st.sidebar.slider("Max Cloud Adj Scale", 10, 40, 25)
+    cloud_max = st.sidebar.slider("Max Cloud Adj Scale", 10, 40, 14)
     cloud_k = st.sidebar.slider("Cloud Steepness Base", 1, 50, 8) / 100
 
     st.sidebar.header("Precipitation Adj")
-    precip_p0 = st.sidebar.slider("Precip Midpoint", 20, 80, 60)
-    precip_k = st.sidebar.slider("Precip Steepness", 1, 50, 10) / 100
-    precip_thresh = st.sidebar.slider("Precip Threshold (in/hr)", 0.01, 0.2, 0.1)
+    precip_p0 = st.sidebar.slider("Precip Midpoint", 20, 80, 64)
+    precip_k = st.sidebar.slider("Precip Steepness", 1, 50, 15) / 100
+    precip_thresh = st.sidebar.slider("Precip Threshold (in/hr)", 0.01, 0.2, 0.05)
 
     st.sidebar.header("Humidity Adj Parameters")
     rh_center = st.sidebar.slider("RH Center", 20, 80, 60)
