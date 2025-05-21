@@ -1,0 +1,40 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# VS Code settings
+.vscode/
+
+# Streamlit secrets (keep Supabase key private!)
+.streamlit/secrets.toml
+
+# Environment files
+.env
+*.env
+
+# Conda virtual environments
+*.conda
+*.lock
+*.yml
+env/
+venv/
+.venv/
+streamlit/
+
+# Mac OS
+.DS_Store
+
+# Jupyter Notebook checkpoints (if any)
+.ipynb_checkpoints/
+
+# Pytest cache
+.pytest_cache/
+
+# Logs and debug files
+*.log
+
+# Compiled Cython files
+*.c
+*.cpp
+*.so
