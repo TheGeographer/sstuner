@@ -212,19 +212,30 @@ if df is not None and not df.empty:
     st.plotly_chart(fig_wind, use_container_width=True)
 
     wind_range = np.linspace(0, 30, 300)
-    wind_curve_50 = blended_wind_adjustment(wind_range, 50, wind_tmin, wind_tmax, wind_scale, wind_decay, warm_ideal, warm_width, warm_scale)
-    wind_curve_70 = blended_wind_adjustment(wind_range, 70, wind_tmin, wind_tmax, wind_scale, wind_decay, warm_ideal, warm_width, warm_scale)
-    wind_curve_90 = blended_wind_adjustment(wind_range, 90, wind_tmin, wind_tmax, wind_scale, wind_decay, warm_ideal, warm_width, warm_scale)
+
+    # --- Model Curves for Multiple Apparent Temps ---
+    temps = list(range(50, 71, 5))  # 30, 40, ..., 90
+    colors = plt.cm.coolwarm(np.linspace(0, 1, len(temps)))  # Gradient from blue to red
 
     fig3, ax3 = plt.subplots(figsize=PLOT_SIZE)
-    ax3.plot(wind_range, wind_curve_50, label="Adj at 50°F", color="blue")
-    ax3.plot(wind_range, wind_curve_70, label="Adj at 70°F", color="purple")
-    ax3.plot(wind_range, wind_curve_90, label="Adj at 90°F", color="red")
+
+    for i, t in enumerate(temps):
+        curve = blended_wind_adjustment(
+            wind_range, t,
+            wind_tmin, wind_tmax,
+            wind_scale, wind_decay,
+            warm_ideal, warm_width, warm_scale
+        )
+        ax3.plot(wind_range, curve, color=colors[i], label=f"{t}°F")
+
+    # Plot actual forecast points
     ax3.scatter(df["windsp"], df["wind_adj"], color="black", zorder=5, label="Forecast Points")
+
     ax3.set_xlabel("Wind Speed (mph)")
     ax3.set_ylabel("Wind Adjustment")
-    ax3.set_title("Wind Adjustment Curve at Apparent Temperature Optimum")
+    ax3.set_title("Wind Adjustment Curves Across Apparent Temperatures")
     ax3.grid(True)
+    ax3.legend(ncol=3, fontsize="small", loc="upper right")
     st.pyplot(fig3)
 
     fig_wind_adj = px.line(df, x="datetime_local", y="wind_adj", title="Wind Adjustment Over Time", labels={"datetime_local": "Local Time", "wind_adj": "Adjustment"})
@@ -245,19 +256,37 @@ if df is not None and not df.empty:
             fig_cloud.add_vline(x=dt, line_width=1, line_dash="dot", line_color="lightgray")
     st.plotly_chart(fig_cloud, use_container_width=True)
 
+    # --- Model Curves for Multiple Apparent Temps ---
     cloud_range = np.linspace(0, 100, 300)
-    cloud_curve = seasonal_cloud_adjustment(cloud_range, calculate_apparent_temperature(np.full_like(cloud_range, temp_opt), np.full_like(cloud_range, 50), np.full_like(cloud_range, 5)), pd.to_datetime(df["date"].iloc[0]).date(), latitude,
-                                            center_temp=65.0, min_scale=cloud_min, max_scale=cloud_max,
-                                            steepness_base=cloud_k)
+    cloud_temps = [45, 55,60, 65,70, 75, 85]
+    cloud_colors = plt.cm.coolwarm(np.linspace(0, 1, len(cloud_temps)))
 
     fig4, ax4 = plt.subplots(figsize=PLOT_SIZE)
-    ax4.plot(cloud_range, cloud_curve, label="Cloud Adj Curve", color="orange")
+
+    for i, temp in enumerate(cloud_temps):
+        app_temp_array = np.full_like(cloud_range, temp)
+        curve = seasonal_cloud_adjustment(
+            cloud_range,
+            app_temp_array,
+            pd.to_datetime(df["date"].iloc[0]).date(),
+            latitude,
+            center_temp=65.0,
+            min_scale=cloud_min,
+            max_scale=cloud_max,
+            steepness_base=cloud_k
+        )
+        ax4.plot(cloud_range, curve, color=cloud_colors[i], label=f"{temp}°F")
+
+    # Plot forecast points
     ax4.scatter(df["cloud"], df["cloud_adj"], color="black", zorder=5, label="Forecast Points")
+
     ax4.set_xlabel("Cloud Cover (%)")
     ax4.set_ylabel("Cloud Adjustment")
-    ax4.set_title("Cloud Adjustment Curve")
-    ax4.grid(True)
+    ax4.set_title("Cloud Adjustment Curves Across Apparent Temperatures")
+    ax4.grid(True, linestyle="--", color="lightgray", linewidth=0.5)
+    ax4.legend(ncol=3, fontsize="small", loc="upper right")
     st.pyplot(fig4)
+
 
     fig_cloud_adj = px.line(df, x="datetime_local", y="cloud_adj", title="Cloud Adjustment Over Time", labels={"datetime_local": "Local Time", "cloud_adj": "Adjustment"})
     fig_cloud_adj.update_traces(mode="lines+markers")
@@ -273,11 +302,12 @@ if df is not None and not df.empty:
     for dt in midnights:
         if dt.hour == 0:
             fig_cloud_static.add_vline(x=dt, line_width=1, line_dash="dot", line_color="lightgray")
-    st.plotly_chart(fig_cloud_static, use_container_width=True)
     for dt in midnights:
         if dt.hour == 0:
             fig_cloud_adj.add_vline(x=dt, line_width=1, line_dash="dot", line_color="lightgray")
     st.plotly_chart(fig_cloud_adj, use_container_width=True)
+    st.plotly_chart(fig_cloud_static, use_container_width=True)
+
 
     # --- Visualize Precipitation Adjustment ---
     st.subheader("Precipitation Adjustment")
