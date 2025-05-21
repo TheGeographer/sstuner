@@ -122,7 +122,7 @@ if df is not None and not df.empty:
 
     df["rh_adj"] = logistic_adjustment(df["rh"], rh_center, rh_k, rh_scale) if use_humidity else 0
     df["wind_adj"] = blended_wind_adjustment(df["windsp"], df["apparent_temp"], wind_tmin, wind_tmax, wind_scale, wind_decay, warm_ideal, warm_width, warm_scale) if use_wind else 0
-    df["cloud_adj"] = seasonal_cloud_adjustment(df["cloud"], df["apparent_temp"], pd.to_datetime(df["date"].iloc[0]).date(), latitude, center_temp=65.0, min_scale=cloud_min, max_scale=cloud_max, steepness_base=cloud_k) if use_cloud else 0
+    df["cloud_adj"] = seasonal_cloud_adjustment(df["cloud"], df["apparent_temp"], pd.to_datetime(df["date"].iloc[0]).date(), latitude, center_temp=65.0, min_scale=cloud_min, max_scale=cloud_max, steepness=cloud_k) if use_cloud else 0
     df["precip_adj"] = precipitation_adjustment(df["chance_pcp"].to_numpy(), df["precip"].to_numpy(), 100, precip_p0, precip_k, precip_thresh) if use_precip else 0
 
     df["score"] = (df["base"] + df["rh_adj"] + df["wind_adj"] + df["cloud_adj"] + df["precip_adj"]).clip(upper=100)
@@ -252,7 +252,7 @@ if df is not None and not df.empty:
                 center_temp=65.0,
                 min_scale=cloud_min,
                 max_scale=cloud_max,
-                steepness_base=cloud_k
+                steepness=cloud_k
             )
             ax4.plot(cloud_range, curve, color=cloud_colors[i], label=f"{temp}°F")
 
@@ -274,7 +274,7 @@ if df is not None and not df.empty:
         # Plot static shade cloud adjustment for 100% cloud cover
         shade_cloud_adj_static = seasonal_cloud_adjustment(100, df["apparent_temp"], pd.to_datetime(df["date"].iloc[0]).date(), latitude,
                                                         center_temp=65.0, min_scale=cloud_min, max_scale=cloud_max,
-                                                        steepness_base=cloud_k)
+                                                        steepness=cloud_k)
         fig_cloud_static = px.line(df, x="datetime_local", y=shade_cloud_adj_static, title="Shade Adjustment (100% Cloud)", labels={"datetime_local": "Local Time", "value": "Shade Cloud Adj"})
         fig_cloud_static.update_traces(mode="lines+markers")
         fig_cloud_static.update_layout(height=300)
@@ -380,7 +380,7 @@ if df is not None and not df.empty:
     # Recalculate cloud adjustment with 100% cloud cover
     shade_cloud_adj = seasonal_cloud_adjustment(100, df["apparent_temp"], pd.to_datetime(df["date"].iloc[0]).date(), latitude,
                                                 center_temp=65.0, min_scale=cloud_min, max_scale=cloud_max,
-                                                steepness_base=cloud_k)
+                                                steepness=cloud_k)
 
     if isinstance(shade_cloud_adj, (int, float)):
         df["score_shade"] = (df["base"] + df["rh_adj"] + df["wind_adj"] + shade_cloud_adj + df["precip_adj"]).clip(upper=100)

@@ -17,30 +17,37 @@ def blended_wind_adjustment(wspd, temp_app_f, tmin=50, tmax=70,
     warm_adj = warm_scale * np.exp(-((wspd - warm_ideal) ** 2) / (2 * warm_width ** 2)) - warm_scale / 2
     return (1 - weight) * cool_adj + weight * warm_adj
 
-def seasonal_cloud_adjustment(cloud_percent, temp_app_f, date, lat_deg,
+def seasonal_cloud_adjustment(cloud_percent, temp_app_f, date_obj, lat_deg,
                               center_temp=65.0, min_scale=7.0, max_scale=25.0,
-                              steepness_base=0.08):
+                              steepness=0.08):
+    """
+    Cloud adjustment model that scales score impact based on apparent temperature,
+    seasonal solar angle, and logistic decay with cloud cover.
+
+    On cool days, clear skies are beneficial (positive adjustment).
+    On warm days, clear skies are detrimental (negative adjustment).
+    Adjustment fades to 0 with increasing cloud cover using a logistic curve.
+    """
     cloud_arr = np.asarray(cloud_percent)
     temp_arr = np.asarray(temp_app_f)
 
-    doy = date.timetuple().tm_yday
+    doy = date_obj.timetuple().tm_yday
     decl = 23.44 * np.pi / 180 * np.sin(2 * np.pi * (doy - 81) / 365)
     lat_rad = np.radians(lat_deg)
-    solar_angle = np.arcsin(np.sin(lat_rad) * np.sin(decl) + np.cos(lat_rad) * np.cos(decl))
-
     decl_max = 23.44 * np.pi / 180
+    solar_angle = np.arcsin(np.sin(lat_rad) * np.sin(decl) + np.cos(lat_rad) * np.cos(decl))
     solar_angle_max = np.arcsin(np.sin(lat_rad) * np.sin(decl_max) + np.cos(lat_rad) * np.cos(decl_max))
     solar_power = np.clip(np.sin(solar_angle) / np.sin(solar_angle_max), 0, 1)
 
-    steepness = steepness_base * (1 + 2.0 * solar_power)
     seasonal_max = min_scale + (max_scale - min_scale) * (solar_power ** 1.25)
+    temp_diff = temp_arr - center_temp
+    temp_scale = np.clip(np.abs(temp_diff) / 15, 0, 1)
+    signed_scale = seasonal_max * temp_scale * -np.sign(temp_diff)
 
-    temp_diff = np.abs(temp_arr - center_temp)
-    scale = np.clip(seasonal_max * (temp_diff / 15), 0, seasonal_max)
-
-    center_cloud = 50
-    signed_steepness = np.where(temp_arr < center_temp, steepness, -steepness)
-    return scale * (1 / (1 + np.exp(signed_steepness * (cloud_arr - center_cloud))) - 0.5)
+    # Logistic decay from 1 to 0 as cloud cover increases
+    decay_factor = 1 / (1 + np.exp(steepness * (cloud_arr - 50)))
+    adj = signed_scale * decay_factor
+    return adj
 
 def precipitation_adjustment(p, precip_in_hr=0.0, scale=100, p0=60, k=0.1, light_threshold=0.1):
     base_adj = -scale * (1 / (1 + np.exp(-k * (p - p0))))
