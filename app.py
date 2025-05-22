@@ -50,10 +50,92 @@ def fetch_forecast_weather(activity, area_uuid):
 PLOT_SIZE = (6, 3)
 st.title("StokeScore Parameter Tuner")
 
-activity = st.text_input("Activity (e.g., climbing)", "climbing")
-area_uuid = st.text_input("Area UUID", "067f2a9f-b353-79e5-8000-99b0e375aad9")
-latitude = st.number_input("Latitude for Climbing Area", value=38.0, format="%.2f")
-timezone = st.text_input("Time Zone (e.g., America/Denver)", "America/Denver")
+# Load example areas from CSV
+@st.cache_data
+def load_example_areas():
+    try:
+        return pd.read_csv("test_area.csv")
+    except Exception as e:
+        st.error(f"Error loading example areas: {e}")
+        return pd.DataFrame(columns=["Name", "activity", "area_uuid", "lat", "tz"])
+
+example_areas = load_example_areas()
+
+# Add an "Example Areas" dropdown
+example_area = st.selectbox(
+    "Example Areas",
+    ["Custom"] + example_areas["Name"].tolist(),
+    index=0
+)
+
+# Initialize session state for form values if not already present
+if "activity" not in st.session_state:
+    st.session_state.activity = "climbing"
+if "area_uuid" not in st.session_state:
+    st.session_state.area_uuid = "067f2a9f-b353-79e5-8000-99b0e375aad9"
+if "latitude" not in st.session_state:
+    st.session_state.latitude = 38.0
+if "timezone" not in st.session_state:
+    st.session_state.timezone = "America/Denver"
+
+# Update form values when an example area is selected
+if example_area != "Custom" and not example_areas.empty:
+    selected_area = example_areas[example_areas["Name"] == example_area].iloc[0]
+    st.session_state.activity = selected_area["activity"]
+    st.session_state.area_uuid = selected_area["area_uuid"]
+    st.session_state.latitude = selected_area["lat"]
+    st.session_state.timezone = selected_area["tz"]
+
+# Activity selection dropdown with default parameters
+activity = st.selectbox(
+    "Activity",
+    ["climbing", "hiking", "biking", "mtnbiking"],
+    index=["climbing", "hiking", "biking", "mtnbiking"].index(st.session_state.activity)
+)
+
+# Default parameters for each activity
+activity_defaults = {
+    "climbing": {
+        "temp_params": (68, 26, 23),  # optimal temp (F), width below, width above
+        "rh_params": (60, 0.1, 10),   # center point, steepness, scale
+        "wind_params": (50, 70, 14, 0.04, 10, 6, 12),  # tmin, tmax, cool_scale, decay, warm_ideal, warm_width, warm_scale
+        "precip_params": (100, 64, 0.15, 0.05),  # scale, p0, k, light_threshold
+        "cloud_params": (65.0, 7.0, 14.0, 0.08)  # center_temp, min_scale, max_scale, steepness_base
+    },
+    "hiking": {
+        "temp_params": (72, 32, 26),  # optimal temp (F), width below, width above
+        "rh_params": (60, 0.1, 8),    # center point, steepness, scale
+        "wind_params": (50, 70, 10, 0.04, 10, 8, 10),  # tmin, tmax, cool_scale, decay, warm_ideal, warm_width, warm_scale
+        "precip_params": (70, 70, 0.015, 0.15),  # scale, p0, k, light_threshold - hikers can tolerate more rain
+        "cloud_params": (65.0, 2.0, 6.0, 0.08)  # center_temp, min_scale, max_scale, steepness_base - hikers less affected by sun/shade
+    },
+    "biking": {
+        "temp_params": (70, 15, 26),  # optimal temp (F), width below, width above
+        "rh_params": (55, 0.12, 10),  # center point, steepness, scale
+        "wind_params": (45, 65, 13, 0.06, 4, 5, 11),  # tmin, tmax, cool_scale, decay, warm_ideal, warm_width, warm_scale
+        "precip_params": (100, 64, 0.15, 0.05),  # scale, p0, k, light_threshold - bikers more sensitive to rain
+        "cloud_params": (65.0, 2.0, 6.0, 0.08)  # center_temp, min_scale, max_scale, steepness_base - bikers more affected by sun/shade
+    },
+    "mtnbiking": {
+        "temp_params": (65, 30, 23),  # optimal temp (F), width below, width above
+        "rh_params": (65, 0.08, 8),   # center point, steepness, scale
+        "wind_params": (45, 65, 6, 0.06, 9, 9, 10),  # tmin, tmax, cool_scale, decay, warm_ideal, warm_width, warm_scale
+        "precip_params": (100, 64, 0.15, 0.05),  # scale, p0, k, light_threshold - some rain can improve trail conditions
+        "cloud_params": (66.0, 2.0, 6.0, 0.08)  # center_temp, min_scale, max_scale, steepness_base - tree cover reduces sun/shade impact
+    }
+}
+
+# Get default parameters for the selected activity
+current_defaults = activity_defaults[activity]
+area_uuid = st.text_input("Area UUID", st.session_state.area_uuid)
+latitude = st.number_input("Latitude for Area", value=float(st.session_state.latitude), format="%.2f")
+timezone = st.text_input("Time Zone (e.g., America/Denver)", st.session_state.timezone)
+
+# Update session state when values change
+st.session_state.activity = activity
+st.session_state.area_uuid = area_uuid
+st.session_state.latitude = latitude
+st.session_state.timezone = timezone
 
 # Adjustment toggles
 st.sidebar.header("Enable Adjustments")
@@ -66,9 +148,27 @@ if "forecast_df" not in st.session_state:
     st.session_state.forecast_df = None
 
 if st.button("Fetch Weather"):
-    st.session_state.forecast_df = fetch_forecast_weather(activity, area_uuid)
+    with st.spinner("Fetching weather data..."):
+        st.session_state.forecast_df = fetch_forecast_weather(activity, area_uuid)
 
 df = st.session_state.forecast_df
+# Add a sample dataset for demonstration if no data is available
+if df is None or df.empty:
+    st.info("No weather data available. Using sample data for demonstration.")
+    # Create sample data for demonstration
+    sample_dates = pd.date_range(start='2025-05-22', periods=24, freq='H')
+    sample_data = {
+        'datetime': sample_dates,
+        'temp': np.random.uniform(60, 80, 24),  # Random temperatures between 60-80°F
+        'rh': np.random.uniform(30, 70, 24),    # Random humidity between 30-70%
+        'windsp': np.random.uniform(0, 15, 24), # Random wind speed between 0-15 mph
+        'cloud': np.random.uniform(0, 100, 24), # Random cloud cover between 0-100%
+        'chance_pcp': np.random.uniform(0, 30, 24), # Random precipitation chance between 0-30%
+        'precip': np.random.uniform(0, 0.1, 24) # Random precipitation amount between 0-0.1 in/hr
+    }
+    df = pd.DataFrame(sample_data)
+    df['date'] = df['datetime'].dt.date
+
 if df is not None and not df.empty:
     import pytz
     try:
@@ -87,43 +187,43 @@ if df is not None and not df.empty:
         df.insert(1, "local", df["datetime_local"])
     st.dataframe(df[["datetime", "local", "temp", "rh", "windsp", "cloud", "chance_pcp", "precip"]])
 
-    # Sliders to adjust parameters
+    # Sliders to adjust parameters with defaults from selected activity
     st.sidebar.header("Base Score Parameters")
-    temp_opt = st.sidebar.slider("Temp Optimum", 40, 100, 68)
-    width_lo = st.sidebar.slider("Width Low", 5, 30, 26)
-    width_hi = st.sidebar.slider("Width High", 5, 30, 23)
+    temp_opt = st.sidebar.slider("Temp Optimum", 40, 100, int(current_defaults["temp_params"][0]))
+    width_lo = st.sidebar.slider("Width Low", 5, 30, int(current_defaults["temp_params"][1]))
+    width_hi = st.sidebar.slider("Width High", 5, 30, int(current_defaults["temp_params"][2]))
 
     st.sidebar.header("Wind Adj Parameters")
-    wind_tmin = 50
-    wind_tmax = 70
-    wind_scale = st.sidebar.slider("Cool Wind Penalty", 0, 50, 14)
-    wind_decay = st.sidebar.slider("Cool Decay (/100)", 1, 20, 4) / 100
-    warm_ideal = st.sidebar.slider("Warm Wind Ideal", 0, 20, 10)
-    warm_width = st.sidebar.slider("Warm Wind Width", 1, 20, 6)
-    warm_scale = st.sidebar.slider("Warm Wind Scale", 0, 50, 12)
+    wind_tmin = current_defaults["wind_params"][0]
+    wind_tmax = current_defaults["wind_params"][1]
+    wind_scale = st.sidebar.slider("Cool Wind Penalty", 0, 50, int(current_defaults["wind_params"][2]))
+    wind_decay = st.sidebar.slider("Cool Decay (/100)", 1, 20, int(current_defaults["wind_params"][3] * 100)) / 100
+    warm_ideal = st.sidebar.slider("Warm Wind Ideal", 0, 20, int(current_defaults["wind_params"][4]))
+    warm_width = st.sidebar.slider("Warm Wind Width", 1, 20, int(current_defaults["wind_params"][5]))
+    warm_scale = st.sidebar.slider("Warm Wind Scale", 0, 50, int(current_defaults["wind_params"][6]))
 
     st.sidebar.header("Cloud Adj Parameters")
-    cloud_min = st.sidebar.slider("Min Cloud Adj Scale", 0, 20, 7)
-    cloud_max = st.sidebar.slider("Max Cloud Adj Scale", 10, 40, 14)
-    cloud_k = st.sidebar.slider("Cloud Steepness Base (/100)", 1, 50, 8) / 100
+    cloud_min = st.sidebar.slider("Min Cloud Adj Scale", 0.0, 20.0, float(current_defaults["cloud_params"][1]))
+    cloud_max = st.sidebar.slider("Max Cloud Adj Scale", 10.0, 40.0, float(current_defaults["cloud_params"][2]))
+    cloud_k = st.sidebar.slider("Cloud Steepness Base (/100)", 1, 50, int(current_defaults["cloud_params"][3] * 100)) / 100
 
     st.sidebar.header("Precipitation Adj")
-    precip_p0 = st.sidebar.slider("Precip Midpoint", 20, 80, 64)
-    precip_k = st.sidebar.slider("Precip Steepness (/100)", 1, 50, 15) / 100
-    precip_thresh = st.sidebar.slider("Precip Threshold (in/hr)", 0.01, 0.2, 0.05)
+    precip_p0 = st.sidebar.slider("Precip Midpoint", 20, 80, int(current_defaults["precip_params"][1]))
+    precip_k = st.sidebar.slider("Precip Steepness (/100)", 1, 50, int(current_defaults["precip_params"][2] * 100)) / 100
+    precip_thresh = st.sidebar.slider("Precip Threshold (in/hr)", 0.01, 0.2, float(current_defaults["precip_params"][3]))
 
     st.sidebar.header("Humidity Adj Parameters")
-    rh_center = st.sidebar.slider("RH Center", 20, 80, 60)
-    rh_k = st.sidebar.slider("RH Steepness (/100)", 1, 50, 10) / 100
-    rh_scale = st.sidebar.slider("RH Scale", 5, 20, 10)
+    rh_center = st.sidebar.slider("RH Center", 20, 80, int(current_defaults["rh_params"][0]))
+    rh_k = st.sidebar.slider("RH Steepness (/100)", 1, 50, int(current_defaults["rh_params"][1] * 100)) / 100
+    rh_scale = st.sidebar.slider("RH Scale", 5, 20, int(current_defaults["rh_params"][2]))
 
     df["apparent_temp"] = calculate_apparent_temperature(df["temp"], df["rh"], df["windsp"])
     df["base"] = unified_base_score(df["apparent_temp"], temp_opt, width_lo, width_hi)
 
     df["rh_adj"] = logistic_adjustment(df["rh"], rh_center, rh_k, rh_scale) if use_humidity else 0
     df["wind_adj"] = blended_wind_adjustment(df["windsp"], df["apparent_temp"], wind_tmin, wind_tmax, wind_scale, wind_decay, warm_ideal, warm_width, warm_scale) if use_wind else 0
-    df["cloud_adj"] = seasonal_cloud_adjustment(df["cloud"], df["apparent_temp"], pd.to_datetime(df["date"].iloc[0]).date(), latitude, center_temp=65.0, min_scale=cloud_min, max_scale=cloud_max, steepness=cloud_k) if use_cloud else 0
-    df["precip_adj"] = precipitation_adjustment(df["chance_pcp"].to_numpy(), df["precip"].to_numpy(), 100, precip_p0, precip_k, precip_thresh) if use_precip else 0
+    df["cloud_adj"] = seasonal_cloud_adjustment(df["cloud"], df["apparent_temp"], pd.to_datetime(df["date"].iloc[0]).date(), latitude, center_temp=current_defaults["cloud_params"][0], min_scale=cloud_min, max_scale=cloud_max, steepness=cloud_k) if use_cloud else 0
+    df["precip_adj"] = precipitation_adjustment(df["chance_pcp"].to_numpy(), df["precip"].to_numpy(), current_defaults["precip_params"][0], precip_p0, precip_k, precip_thresh) if use_precip else 0
 
     df["score"] = (df["base"] + df["rh_adj"] + df["wind_adj"] + df["cloud_adj"] + df["precip_adj"]).clip(upper=100)
 
@@ -132,6 +232,7 @@ if df is not None and not df.empty:
     # --- Visualize Base Score ---
     st.subheader("Base Score: Apparent Temperature")
     import plotly.express as px
+    
     fig_temp = px.line(df, x="datetime_local", y="temp", title="Forecast Temperature (°F) [Ambient]", labels={"datetime_local": "Local Time", "temp": "Temp (°F)"})
     fig_temp.update_traces(mode="lines+markers")
     fig_temp.update_layout(height=300)
@@ -177,6 +278,7 @@ if df is not None and not df.empty:
     # --- Visualize Wind Adjustment ---
     if use_wind:
         st.subheader("Wind Adjustment")
+        
         fig_wind = px.line(df, x="datetime_local", y="windsp", title="Wind Speed Forecast", labels={"datetime_local": "Local Time", "windsp": "Wind (mph)"})
         fig_wind.update_traces(mode="lines+markers")
         fig_wind.update_layout(height=300)
@@ -184,10 +286,17 @@ if df is not None and not df.empty:
             if dt.hour == 0:
                 fig_wind.add_vline(x=dt, line_width=1, line_dash="dot", line_color="lightgray")
         st.plotly_chart(fig_wind, use_container_width=True)
-
-        wind_range = np.linspace(0, 30, 300)
+        
+        fig_wind_adj = px.line(df, x="datetime_local", y="wind_adj", title="Wind Adjustment Over Time", labels={"datetime_local": "Local Time", "wind_adj": "Adjustment"})
+        fig_wind_adj.update_traces(mode="lines+markers")
+        fig_wind_adj.update_layout(height=300)
+        for dt in midnights:
+            if dt.hour == 0:
+                fig_wind_adj.add_vline(x=dt, line_width=1, line_dash="dot", line_color="lightgray")
+        st.plotly_chart(fig_wind_adj, use_container_width=True)
 
         # --- Model Curves for Multiple Apparent Temps ---
+        wind_range = np.linspace(0, 30, 300)
         temps = list(range(50, 71, 5))  # 30, 40, ..., 90
         colors = plt.cm.coolwarm(np.linspace(0, 1, len(temps)))  # Gradient from blue to red
 
@@ -211,14 +320,6 @@ if df is not None and not df.empty:
         ax3.grid(True)
         ax3.legend(ncol=3, fontsize="small", loc="upper right")
         st.pyplot(fig3)
-
-        fig_wind_adj = px.line(df, x="datetime_local", y="wind_adj", title="Wind Adjustment Over Time", labels={"datetime_local": "Local Time", "wind_adj": "Adjustment"})
-        fig_wind_adj.update_traces(mode="lines+markers")
-        fig_wind_adj.update_layout(height=300)
-        for dt in midnights:
-            if dt.hour == 0:
-                fig_wind_adj.add_vline(x=dt, line_width=1, line_dash="dot", line_color="lightgray")
-        st.plotly_chart(fig_wind_adj, use_container_width=True)
     else:
         st.subheader("Wind Adjustment (Disabled)")
         st.caption("This section is currently disabled.")
@@ -227,6 +328,7 @@ if df is not None and not df.empty:
     # --- Visualize Cloud Adjustment ---
     if use_cloud:
         st.subheader("Cloud Adjustment")
+        
         fig_cloud = px.line(df, x="datetime_local", y="cloud", title="Cloud Cover Forecast", labels={"datetime_local": "Local Time", "cloud": "Cloud (%)"})
         fig_cloud.update_traces(mode="lines+markers")
         fig_cloud.update_layout(height=300)
@@ -234,6 +336,14 @@ if df is not None and not df.empty:
             if dt.hour == 0:
                 fig_cloud.add_vline(x=dt, line_width=1, line_dash="dot", line_color="lightgray")
         st.plotly_chart(fig_cloud, use_container_width=True)
+        
+        fig_cloud_adj = px.line(df, x="datetime_local", y="cloud_adj", title="Cloud Adjustment Over Time", labels={"datetime_local": "Local Time", "cloud_adj": "Adjustment"})
+        fig_cloud_adj.update_traces(mode="lines+markers")
+        fig_cloud_adj.update_layout(height=300)
+        for dt in midnights:
+            if dt.hour == 0:
+                fig_cloud_adj.add_vline(x=dt, line_width=1, line_dash="dot", line_color="lightgray")
+        st.plotly_chart(fig_cloud_adj, use_container_width=True)
 
         # --- Model Curves for Multiple Apparent Temps ---
         cloud_range = np.linspace(0, 100, 300)
@@ -249,7 +359,7 @@ if df is not None and not df.empty:
                 app_temp_array,
                 pd.to_datetime(df["date"].iloc[0]).date(),
                 latitude,
-                center_temp=65.0,
+                center_temp=current_defaults["cloud_params"][0],
                 min_scale=cloud_min,
                 max_scale=cloud_max,
                 steepness=cloud_k
@@ -265,27 +375,20 @@ if df is not None and not df.empty:
         ax4.grid(True, linestyle="--", color="lightgray", linewidth=0.5)
         ax4.legend(ncol=3, fontsize="small", loc="upper right")
         st.pyplot(fig4)
-
-
-        fig_cloud_adj = px.line(df, x="datetime_local", y="cloud_adj", title="Cloud Adjustment Over Time", labels={"datetime_local": "Local Time", "cloud_adj": "Adjustment"})
-        fig_cloud_adj.update_traces(mode="lines+markers")
-        fig_cloud_adj.update_layout(height=300)
-
-        # Plot static shade cloud adjustment for 100% cloud cover
-        shade_cloud_adj_static = seasonal_cloud_adjustment(100, df["apparent_temp"], pd.to_datetime(df["date"].iloc[0]).date(), latitude,
-                                                        center_temp=65.0, min_scale=cloud_min, max_scale=cloud_max,
-                                                        steepness=cloud_k)
-        fig_cloud_static = px.line(df, x="datetime_local", y=shade_cloud_adj_static, title="Shade Adjustment (100% Cloud)", labels={"datetime_local": "Local Time", "value": "Shade Cloud Adj"})
-        fig_cloud_static.update_traces(mode="lines+markers")
-        fig_cloud_static.update_layout(height=300)
-        for dt in midnights:
-            if dt.hour == 0:
-                fig_cloud_static.add_vline(x=dt, line_width=1, line_dash="dot", line_color="lightgray")
-        for dt in midnights:
-            if dt.hour == 0:
-                fig_cloud_adj.add_vline(x=dt, line_width=1, line_dash="dot", line_color="lightgray")
-        st.plotly_chart(fig_cloud_adj, use_container_width=True)
-        st.plotly_chart(fig_cloud_static, use_container_width=True)
+        
+        # Only show shade adjustment for climbing activity
+        if activity == "climbing":
+            # Plot static shade cloud adjustment for 100% cloud cover
+            shade_cloud_adj_static = seasonal_cloud_adjustment(100, df["apparent_temp"], pd.to_datetime(df["date"].iloc[0]).date(), latitude,
+                                                            center_temp=current_defaults["cloud_params"][0], min_scale=cloud_min, max_scale=cloud_max,
+                                                            steepness=cloud_k)
+            fig_cloud_static = px.line(df, x="datetime_local", y=shade_cloud_adj_static, title="Shade Adjustment (100% Cloud)", labels={"datetime_local": "Local Time", "value": "Shade Cloud Adj"})
+            fig_cloud_static.update_traces(mode="lines+markers")
+            fig_cloud_static.update_layout(height=300)
+            for dt in midnights:
+                if dt.hour == 0:
+                    fig_cloud_static.add_vline(x=dt, line_width=1, line_dash="dot", line_color="lightgray")
+            st.plotly_chart(fig_cloud_static, use_container_width=True)
     else:
         st.subheader("Cloud Adjustment (Disabled)")
         st.caption("This section is currently disabled.")
@@ -294,6 +397,7 @@ if df is not None and not df.empty:
     # --- Visualize Precipitation Adjustment ---
     if use_precip:
         st.subheader("Precipitation Adjustment")
+        
         fig_chance = px.line(df, x="datetime_local", y="chance_pcp", title="Precipitation Chance Forecast", labels={"datetime_local": "Local Time", "chance_pcp": "Chance (%)"})
         fig_chance.update_traces(mode="lines+markers")
         fig_chance.update_layout(height=300)
@@ -301,7 +405,7 @@ if df is not None and not df.empty:
             if dt.hour == 0:
                 fig_chance.add_vline(x=dt, line_width=1, line_dash="dot", line_color="lightgray")
         st.plotly_chart(fig_chance, use_container_width=True)
-
+        
         fig_precip_amt = px.line(df, x="datetime_local", y="precip", title="Precipitation Amount Forecast", labels={"datetime_local": "Local Time", "precip": "Precip (in/hr)"})
         fig_precip_amt.update_traces(mode="lines+markers")
         fig_precip_amt.update_layout(height=300)
@@ -309,9 +413,9 @@ if df is not None and not df.empty:
             if dt.hour == 0:
                 fig_precip_amt.add_vline(x=dt, line_width=1, line_dash="dot", line_color="lightgray")
         st.plotly_chart(fig_precip_amt, use_container_width=True)
-
+        
         p_range = np.linspace(0, 100, 300)
-        p_curve = precipitation_adjustment(p_range, precip_in_hr=0.2, scale=100, p0=precip_p0, k=precip_k, light_threshold=precip_thresh)
+        p_curve = precipitation_adjustment(p_range, precip_in_hr=0.2, scale=current_defaults["precip_params"][0], p0=precip_p0, k=precip_k, light_threshold=precip_thresh)
 
         fig5, ax5 = plt.subplots(figsize=PLOT_SIZE)
         ax5.plot(p_range, p_curve, label="Precip Adj Curve (0.2 in/hr)", color="red")
@@ -320,14 +424,13 @@ if df is not None and not df.empty:
         # Add half-penalty reference line
         ax5.plot(p_range, p_curve / 2, linestyle="--", color="darkred", label="Half Penalty Curve")
 
-
         ax5.set_xlabel("Chance of Precipitation (%)")
         ax5.set_ylabel("Precip Adjustment")
         ax5.set_title("Precipitation Adjustment Curve")
         ax5.grid(True, linestyle="--", color="lightgray", linewidth=0.5)
         ax5.legend(fontsize="small")
         st.pyplot(fig5)
-
+        
         fig_precip_adj = px.line(df, x="datetime_local", y="precip_adj", title="Precipitation Adjustment Over Time", labels={"datetime_local": "Local Time", "precip_adj": "Adjustment"})
         fig_precip_adj.update_traces(mode="lines+markers")
         fig_precip_adj.update_layout(height=300)
@@ -374,32 +477,121 @@ if df is not None and not df.empty:
         st.subheader("Humidity Adjustment (Disabled)")
         st.caption("This section is currently disabled.")
 
-    # --- Final Score Visualization: Sun vs Shade ---
-    st.subheader("Final Scores: Sun vs. Shade")
+    # --- Final Score Visualization ---
+    if activity == "climbing":
+        st.subheader("Final Scores: Sun vs. Shade")
+        
+        # Recalculate cloud adjustment with 100% cloud cover
+        shade_cloud_adj = seasonal_cloud_adjustment(100, df["apparent_temp"], pd.to_datetime(df["date"].iloc[0]).date(), latitude,
+                                                    center_temp=current_defaults["cloud_params"][0], min_scale=cloud_min, max_scale=cloud_max,
+                                                    steepness=cloud_k)
 
-    # Recalculate cloud adjustment with 100% cloud cover
-    shade_cloud_adj = seasonal_cloud_adjustment(100, df["apparent_temp"], pd.to_datetime(df["date"].iloc[0]).date(), latitude,
-                                                center_temp=65.0, min_scale=cloud_min, max_scale=cloud_max,
-                                                steepness=cloud_k)
+        if isinstance(shade_cloud_adj, (int, float)):
+            df["score_shade"] = (df["base"] + df["rh_adj"] + df["wind_adj"] + shade_cloud_adj + df["precip_adj"]).clip(upper=100)
+        else:
+            df["score_shade"] = (df["base"] + df["rh_adj"] + df["wind_adj"] + shade_cloud_adj + df["precip_adj"]).clip(upper=100)
 
-    if isinstance(shade_cloud_adj, (int, float)):
-        df["score_shade"] = (df["base"] + df["rh_adj"] + df["wind_adj"] + shade_cloud_adj + df["precip_adj"]).clip(upper=100)
+        df["score_sun"] = df["score"].clip(upper=100)
+
+        fig6, ax6 = plt.subplots(figsize=(8, 3))
+        
+        # Add colored background bands
+        ax6.axhspan(90, 100, facecolor='darkgreen', alpha=0.3)
+        ax6.axhspan(80, 90, facecolor='lightgreen', alpha=0.3)
+        ax6.axhspan(70, 80, facecolor='yellow', alpha=0.3)
+        ax6.axhspan(60, 70, facecolor='orange', alpha=0.3)
+        
+        # Plot the scores
+        ax6.plot(df["datetime_local"], df["score_sun"], label="Sun Score", color="gold", linewidth=2.5)
+        ax6.plot(df["datetime_local"], df["score_shade"], label="Shade Score (100% cloud)", color="gray", linewidth=2.5)
+        
+        # Set axis limits and labels
+        ax6.set_ylim(0, 100)  # Fixed y-axis from 0-100
+        ax6.set_ylabel("Stoke Score")
+        ax6.set_xlabel("Datetime")
+        ax6.set_title("Sun vs. Shade Scores")
+        ax6.grid(True, alpha=0.3)
+        
+        # Format x-axis date labels to remove year
+        import matplotlib.dates as mdates
+        ax6.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
+        
+        # Add midnight lines and night shading (10pm-6am)
+        local_dates = df["datetime_local"].dt.date.unique()
+        for local_date in local_dates:
+            # Find the timestamp for midnight on this date in local time
+            local_midnight = pd.Timestamp(local_date).tz_localize(timezone)
+            
+            # Add vertical line at midnight
+            ax6.axvline(local_midnight, color="black", linestyle=":", linewidth=0.5)
+            
+            # Add grey bar for night time (10pm to 6am)
+            night_start = pd.Timestamp(local_date).tz_localize(timezone) - pd.Timedelta(hours=2)  # 10pm the previous day
+            night_end = pd.Timestamp(local_date).tz_localize(timezone) + pd.Timedelta(hours=6)    # 6am the current day
+            ax6.axvspan(night_start, night_end, color="grey", alpha=0.1)
+        
+        ax6.legend(loc='lower right')
+        st.pyplot(fig6, use_container_width=True)
+        st.write("**Sun Score:** Uses real cloud values")
+        st.write("**Shade Score:** Assumes 100% cloud cover (i.e., no sun benefit)")
+        
+        # Display sun score values in a table
+        st.write("**Sun Score Values:**")
+        score_table = pd.DataFrame({
+            "UTC Datetime": df["datetime"],
+            "Local Datetime": df["datetime_local"],
+            "Sun Score": df["score_sun"].round(1)
+        })
+        st.dataframe(score_table)
     else:
-        df["score_shade"] = (df["base"] + df["rh_adj"] + df["wind_adj"] + shade_cloud_adj + df["precip_adj"]).clip(upper=100)
+        st.subheader("Final Score")
+        
+        df["score_sun"] = df["score"].clip(upper=100)
 
-    df["score_sun"] = df["score"].clip(upper=100)
-
-    fig6, ax6 = plt.subplots(figsize=(8, 3))
-    ax6.plot(df["datetime_local"], df["score_sun"], label="Sun Score", color="gold")
-    ax6.plot(df["datetime_local"], df["score_shade"], label="Shade Score (100% cloud)", color="gray")
-    ax6.set_ylabel("Stoke Score")
-    ax6.set_xlabel("Datetime")
-    ax6.set_title("Sun vs. Shade Scores")
-    ax6.grid(True)
-    for dt in pd.to_datetime(df["datetime_local"]).dt.tz_localize(None):
-        if dt.hour == 0:
-            ax6.axvline(dt, color="black", linestyle=":", linewidth=0.5)
-    ax6.legend()
-    st.pyplot(fig6, use_container_width=True)
-    st.write("**Sun Score:** Uses real cloud values")
-    st.write("**Shade Score:** Assumes 100% cloud cover (i.e., no sun benefit)")
+        fig6, ax6 = plt.subplots(figsize=(8, 3))
+        
+        # Add colored background bands
+        ax6.axhspan(90, 100, facecolor='darkgreen', alpha=0.3)
+        ax6.axhspan(80, 90, facecolor='lightgreen', alpha=0.3)
+        ax6.axhspan(70, 80, facecolor='yellow', alpha=0.3)
+        ax6.axhspan(60, 70, facecolor='orange', alpha=0.3)
+        
+        # Plot the score
+        ax6.plot(df["datetime_local"], df["score_sun"], label="Score", color="gold", linewidth=2.5)
+        
+        # Set axis limits and labels
+        ax6.set_ylim(0, 100)  # Fixed y-axis from 0-100
+        ax6.set_ylabel("Stoke Score")
+        ax6.set_xlabel("Datetime")
+        ax6.set_title(f"{activity.capitalize()} Score")
+        ax6.grid(True, alpha=0.3)
+        
+        # Format x-axis date labels to remove year
+        import matplotlib.dates as mdates
+        ax6.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
+        
+        # Add midnight lines and night shading (10pm-6am)
+        local_dates = df["datetime_local"].dt.date.unique()
+        for local_date in local_dates:
+            # Find the timestamp for midnight on this date in local time
+            local_midnight = pd.Timestamp(local_date).tz_localize(timezone)
+            
+            # Add vertical line at midnight
+            ax6.axvline(local_midnight, color="black", linestyle=":", linewidth=0.5)
+            
+            # Add grey bar for night time (10pm to 6am)
+            night_start = pd.Timestamp(local_date).tz_localize(timezone) - pd.Timedelta(hours=2)  # 10pm the previous day
+            night_end = pd.Timestamp(local_date).tz_localize(timezone) + pd.Timedelta(hours=6)    # 6am the current day
+            ax6.axvspan(night_start, night_end, color="grey", alpha=0.1)
+        
+        ax6.legend(loc='lower right')
+        st.pyplot(fig6, use_container_width=True)
+        
+        # Display sun score values in a table
+        st.write("**Sun Score Values:**")
+        score_table = pd.DataFrame({
+            "UTC Datetime": df["datetime"],
+            "Local Datetime": df["datetime_local"],
+            "Sun Score": df["score_sun"].round(1)
+        })
+        st.dataframe(score_table)

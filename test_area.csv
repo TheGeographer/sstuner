@@ -1,0 +1,8 @@
+Name,activity,area_uuid,lat,tz
+"Climbing: Shelf Road, CO",climbing,067f2a9f-b353-79e5-8000-99b0e375aad9,38.7,America/Denver
+"Climbing: Devil's Lake, WI",climbing,067f2a9f-b360-79ed-8000-ddf22bff266e,43.4,America/Chicago
+"Climbing:  Red Rock, NV",climbing,067f2a9f-b34d-7c6a-8000-0bc69131d886,26.1,America/Los_Angeles
+"Climbing:  Red River Gorge, KY",climbing,067f2a9f-b351-74e8-8000-d57ce904f570,37.7,America/New_York
+Hiking: Kettle Moraine State Forest-Southern Unit,hiking,067ab652-7641-79bc-800f-27481c05e9a9,42.9,America/Chicago
+"Biking: Fort Atkinson, WI",biking,067abac5-b5ee-749b-8104-6a53068c1d0d,42.9,America/Chicago
+MtnBiking: Kettle Moraine State Forest,mtnbiking,067b8b15-5930-7952-8000-ecb7c1b4aa36,43,America/Chicago
