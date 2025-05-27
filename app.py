@@ -96,28 +96,28 @@ activity = st.selectbox(
 # Default parameters for each activity
 activity_defaults = {
     "climbing": {
-        "temp_params": (68, 26, 23),  # optimal temp (F), width below, width above
+        "temp_params": (68, 26, 23, 95),  # optimal temp (F), width below, width above, value at optimal
         "rh_params": (60, 0.1, 10),   # center point, steepness, scale
         "wind_params": (50, 70, 14, 0.04, 10, 6, 12),  # tmin, tmax, cool_scale, decay, warm_ideal, warm_width, warm_scale
         "precip_params": (100, 64, 0.15, 0.05),  # scale, p0, k, light_threshold
         "cloud_params": (65.0, 7.0, 14.0, 0.08)  # center_temp, min_scale, max_scale, steepness_base
     },
     "hiking": {
-        "temp_params": (72, 32, 26),  # optimal temp (F), width below, width above
+        "temp_params": (72, 32, 26, 95),  # optimal temp (F), width below, width above, value at optimal
         "rh_params": (60, 0.1, 8),    # center point, steepness, scale
         "wind_params": (50, 70, 10, 0.04, 10, 8, 10),  # tmin, tmax, cool_scale, decay, warm_ideal, warm_width, warm_scale
         "precip_params": (100, 70, 0.07, 0.15),  # scale, p0, k, light_threshold - hikers can tolerate more rain
         "cloud_params": (65.0, 2.0, 6.0, 0.08)  # center_temp, min_scale, max_scale, steepness_base - hikers less affected by sun/shade
     },
     "biking": {
-        "temp_params": (70, 15, 26),  # optimal temp (F), width below, width above
+        "temp_params": (70, 15, 26, 95),  # optimal temp (F), width below, width above, value at optimal
         "rh_params": (55, 0.12, 10),  # center point, steepness, scale
         "wind_params": (45, 65, 13, 0.06, 4, 5, 11),  # tmin, tmax, cool_scale, decay, warm_ideal, warm_width, warm_scale
         "precip_params": (100, 64, 0.15, 0.05),  # scale, p0, k, light_threshold - bikers more sensitive to rain
         "cloud_params": (65.0, 2.0, 6.0, 0.08)  # center_temp, min_scale, max_scale, steepness_base - bikers more affected by sun/shade
     },
     "mtnbiking": {
-        "temp_params": (65, 30, 23),  # optimal temp (F), width below, width above
+        "temp_params": (65, 30, 23, 95),  # optimal temp (F), width below, width above, value at optimal
         "rh_params": (65, 0.08, 8),   # center point, steepness, scale
         "wind_params": (45, 65, 6, 0.06, 9, 9, 10),  # tmin, tmax, cool_scale, decay, warm_ideal, warm_width, warm_scale
         "precip_params": (100, 64, 0.15, 0.05),  # scale, p0, k, light_threshold - some rain can improve trail conditions
@@ -192,6 +192,7 @@ if df is not None and not df.empty:
     temp_opt = st.sidebar.slider("Temp Optimum", 40, 100, int(current_defaults["temp_params"][0]))
     width_lo = st.sidebar.slider("Width Low", 5, 30, int(current_defaults["temp_params"][1]))
     width_hi = st.sidebar.slider("Width High", 5, 30, int(current_defaults["temp_params"][2]))
+    value_at_optimal = st.sidebar.slider("Value at Optimal Score", 80, 100, int(current_defaults["temp_params"][3]))
 
     st.sidebar.header("Wind Adj Parameters")
     wind_tmin = current_defaults["wind_params"][0]
@@ -218,7 +219,7 @@ if df is not None and not df.empty:
     rh_scale = st.sidebar.slider("RH Scale", 5, 20, int(current_defaults["rh_params"][2]))
 
     df["apparent_temp"] = calculate_apparent_temperature(df["temp"], df["rh"], df["windsp"])
-    df["base"] = unified_base_score(df["apparent_temp"], temp_opt, width_lo, width_hi)
+    df["base"] = unified_base_score(df["apparent_temp"], temp_opt, width_lo, width_hi, value_at_optimal)
 
     df["rh_adj"] = logistic_adjustment(df["rh"], rh_center, rh_k, rh_scale) if use_humidity else 0
     df["wind_adj"] = blended_wind_adjustment(df["windsp"], df["apparent_temp"], wind_tmin, wind_tmax, wind_scale, wind_decay, warm_ideal, warm_width, warm_scale) if use_wind else 0
@@ -252,7 +253,7 @@ if df is not None and not df.empty:
     # Plot Gaussian curve for base score over a temp range
     temp_range = np.linspace(20, 100, 300)
     apparent_temp_range = calculate_apparent_temperature(temp_range, np.full_like(temp_range, 50), np.full_like(temp_range, 5))
-    base_curve = unified_base_score(apparent_temp_range, temp_opt, width_lo, width_hi)
+    base_curve = unified_base_score(apparent_temp_range, temp_opt, width_lo, width_hi, value_at_optimal)
 
     fig1, ax1 = plt.subplots(figsize=(6, 3))
     ax1.plot(apparent_temp_range, base_curve, label="Base Score Curve", color="blue")

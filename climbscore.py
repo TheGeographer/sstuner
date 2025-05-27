@@ -2,9 +2,9 @@
 import numpy as np
 from datetime import date
 
-def unified_base_score(temp_app_f, temp_opt=70, width_low=20, width_high=15):
+def unified_base_score(temp_app_f, temp_opt=70, width_low=20, width_high=15, value_at_optimal=100):
     width = np.where(temp_app_f < temp_opt, width_low, width_high)
-    return 100 * np.exp(-((temp_app_f - temp_opt) ** 2) / (2 * width ** 2))
+    return value_at_optimal * np.exp(-((temp_app_f - temp_opt) ** 2) / (2 * width ** 2))
 
 def logistic_adjustment(x, center, steepness, scale=10):
     return scale * (1 / (1 + np.exp(steepness * (x - center))) - 0.5)
