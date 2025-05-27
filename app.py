@@ -416,10 +416,10 @@ if df is not None and not df.empty:
         st.plotly_chart(fig_precip_amt, use_container_width=True)
         
         p_range = np.linspace(0, 100, 300)
-        p_curve = precipitation_adjustment(p_range, precip_in_hr=0.2, scale=current_defaults["precip_params"][0], p0=precip_p0, k=precip_k, light_threshold=precip_thresh)
+        p_curve = precipitation_adjustment(p_range, precip_in_hr=precip_thresh, scale=current_defaults["precip_params"][0], p0=precip_p0, k=precip_k, light_threshold=precip_thresh)
 
         fig5, ax5 = plt.subplots(figsize=PLOT_SIZE)
-        ax5.plot(p_range, p_curve, label="Precip Adj Curve (0.2 in/hr)", color="red")
+        ax5.plot(p_range, p_curve, label=f"Precip Adj Curve ({precip_thresh:.2f} in/hr)", color="red")
         ax5.scatter(df["chance_pcp"], df["precip_adj"], color="black", zorder=5, label="Forecast Points")
 
         # Add half-penalty reference line
