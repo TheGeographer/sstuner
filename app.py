@@ -106,7 +106,7 @@ activity_defaults = {
         "temp_params": (72, 32, 26),  # optimal temp (F), width below, width above
         "rh_params": (60, 0.1, 8),    # center point, steepness, scale
         "wind_params": (50, 70, 10, 0.04, 10, 8, 10),  # tmin, tmax, cool_scale, decay, warm_ideal, warm_width, warm_scale
-        "precip_params": (70, 70, 0.015, 0.15),  # scale, p0, k, light_threshold - hikers can tolerate more rain
+        "precip_params": (100, 70, 0.07, 0.15),  # scale, p0, k, light_threshold - hikers can tolerate more rain
         "cloud_params": (65.0, 2.0, 6.0, 0.08)  # center_temp, min_scale, max_scale, steepness_base - hikers less affected by sun/shade
     },
     "biking": {
