@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import requests
 from datetime import date
-from climbscore import (
+from scorescore_v2 import (
     unified_base_score,
     logistic_adjustment,
     blended_wind_adjustment,
@@ -544,6 +544,9 @@ if df is not None and not df.empty:
             "Sun Score": df["score_sun"].round(1)
         })
         st.dataframe(score_table)
+
+        
+
     else:
         st.subheader("Final Score")
         
@@ -596,3 +599,31 @@ if df is not None and not df.empty:
             "Sun Score": df["score_sun"].round(1)
         })
         st.dataframe(score_table)
+
+# --- Stoke Score Comparison Table ---
+    st.subheader("Compare tuner to supabase data") 
+    if "stoke" in df.columns:
+        st.write("**Stoke Score Comparison:**")
+        comparison_table = pd.DataFrame({
+            "UTC Datetime": df["datetime"],
+            "Local Datetime": df["datetime_local"],
+            "Tuner Stoke Score": df["score_sun"].round(1),
+            "Supabase Stoke Score": df["stoke"].round(1),
+            "Difference": (df["score_sun"] - df["stoke"]).round(2)
+        })
+
+        def diff_bg_color(val):
+            abs_val = abs(val)
+            if abs_val < 0.1:
+                return "background-color: #d4edda"  # light green
+            elif abs_val < 0.5:
+                return "background-color: #fff3cd"  # light yellow
+            else:
+                return "background-color: #f8d7da"  # light red
+
+        styled_comparison = comparison_table.style.applymap(
+            diff_bg_color, subset=["Difference"]
+        )
+        st.dataframe(styled_comparison)
+    else:
+        st.info("Supabase stoke score not available in the data.")
