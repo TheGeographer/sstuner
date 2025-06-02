@@ -49,6 +49,65 @@ def seasonal_cloud_adjustment(cloud_percent, temp_app_f, date_obj, lat_deg,
     adj = signed_scale * decay_factor
     return adj
 
+def seasonal_cloud_adjustment_old(cloud_percent, temp_app_f, current_date, lat_deg,
+                                 cloud_params):
+    """
+    Seasonally adjusted cloud cover score adjustment based on latitude, date, and temperature.
+
+    This function calculates how clouds affect the stokescore, which varies by:
+    - Season (clouds have stronger effects in summer than winter)
+    - Temperature (clouds are beneficial in hot weather, detrimental in cold weather)
+    - Latitude (sun angle affects the impact of clouds)
+
+    The adjustment can be positive or negative:
+    - Positive adjustment (bonus): When it's cold and clouds are absent (sunny)
+    - Negative adjustment (penalty): When it's hot and clouds are absent (sunny)
+    - Near zero adjustment: When cloud cover is around 100% or temperature is moderate
+
+    This complex calculation accounts for the fact that sun exposure has different
+    effects depending on conditions (e.g., sun feels good when it's cold, but can
+    be uncomfortable when it's hot).
+
+    Parameters:
+    - cloud_percent: Cloud cover (0–100%)
+    - temp_app_f: Apparent temp (°F)
+    - current_date: datetime.date object for seasonal calculations
+    - lat_deg: Latitude in degrees (can be a 2D array)
+    - cloud_params: Activity-specific cloud parameters (center_temp, min_scale, max_scale, steepness_base)
+
+    Returns:
+    - Cloud adjustment score (positive in cold sun, negative in hot sun)
+    """
+    center_temp, min_scale, max_scale, steepness_base = cloud_params
+
+    cloud_arr = np.asarray(cloud_percent)
+    temp_arr = np.asarray(temp_app_f)
+    lat_arr = np.asarray(lat_deg)
+
+    if temp_arr.ndim > lat_arr.ndim:
+        lat_arr = np.expand_dims(lat_arr, axis=0)
+
+    doy = current_date.timetuple().tm_yday
+    decl = 23.44 * np.pi / 180 * np.sin(2 * np.pi * (doy - 81) / 365)
+    lat_rad = np.radians(lat_arr)
+    solar_angle = np.arcsin(np.sin(lat_rad) * np.sin(decl) + np.cos(lat_rad) * np.cos(decl))
+
+    decl_max = 23.44 * np.pi / 180
+    solar_angle_max = np.arcsin(np.sin(lat_rad) * np.sin(decl_max) + np.cos(lat_rad) * np.cos(decl_max))
+    solar_angle_max = np.where(np.abs(solar_angle_max) < 1e-10, 1e-10, solar_angle_max)
+    solar_power = np.clip(np.sin(solar_angle) / np.sin(solar_angle_max), 0, 1)
+
+    steepness = steepness_base * (1 + 2.0 * solar_power)
+    seasonal_max = min_scale + (max_scale - min_scale) * (solar_power ** 1.25)
+
+    temp_diff = np.abs(temp_arr - center_temp)
+    scale = np.clip(seasonal_max * (temp_diff / 15), 0, seasonal_max)
+
+    center_cloud = 100
+    signed_steepness = np.where(temp_arr < center_temp, steepness, -steepness)
+    # Adjust logistic function to converge to zero adjustment at 100% cloud cover
+    return scale * (1 / (1 + np.exp(signed_steepness * (cloud_arr - center_cloud))) - 0.5)
+
 def precipitation_adjustment(p, precip_in_hr=0.0, scale=100, p0=60, k=0.1, light_threshold=0.1):
     base_adj = -scale * (1 / (1 + np.exp(-k * (p - p0))))
     if isinstance(precip_in_hr, (np.ndarray, list)):

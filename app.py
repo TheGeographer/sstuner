@@ -4,11 +4,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import requests
 from datetime import date
-from scorescore_v2 import (
+from stokescore_v2 import (
     unified_base_score,
     logistic_adjustment,
     blended_wind_adjustment,
     seasonal_cloud_adjustment,
+    seasonal_cloud_adjustment_old,
     precipitation_adjustment,
     calculate_apparent_temperature
 )
@@ -224,11 +225,17 @@ if df is not None and not df.empty:
     df["rh_adj"] = logistic_adjustment(df["rh"], rh_center, rh_k, rh_scale) if use_humidity else 0
     df["wind_adj"] = blended_wind_adjustment(df["windsp"], df["apparent_temp"], wind_tmin, wind_tmax, wind_scale, wind_decay, warm_ideal, warm_width, warm_scale) if use_wind else 0
     df["cloud_adj"] = seasonal_cloud_adjustment(df["cloud"], df["apparent_temp"], pd.to_datetime(df["date"].iloc[0]).date(), latitude, center_temp=current_defaults["cloud_params"][0], min_scale=cloud_min, max_scale=cloud_max, steepness=cloud_k) if use_cloud else 0
+    #df["cloud_adj_v2"] = seasonal_cloud_adjustment_v2(df["cloud"], df["apparent_temp"], pd.to_datetime(df["date"].iloc[0]).date(), latitude, (current_defaults["cloud_params"][0], cloud_min, cloud_max, cloud_k))
     df["precip_adj"] = precipitation_adjustment(df["chance_pcp"].to_numpy(), df["precip"].to_numpy(), current_defaults["precip_params"][0], precip_p0, precip_k, precip_thresh) if use_precip else 0
 
+    # Add final score switch for cloud adjustment version
+    #use_cloud_v2 = st.sidebar.checkbox("Use New Cloud Adjustment for Final Score", value=False)
+    #if use_cloud_v2 and use_cloud:
+    #    df["score"] = (df["base"] + df["rh_adj"] + df["wind_adj"] + df["cloud_adj_v2"] + df["precip_adj"]).clip(upper=100)
+    #else:
     df["score"] = (df["base"] + df["rh_adj"] + df["wind_adj"] + df["cloud_adj"] + df["precip_adj"]).clip(upper=100)
-
-
+    
+        
 
     # --- Visualize Base Score ---
     st.subheader("Base Score: Apparent Temperature")
@@ -338,13 +345,7 @@ if df is not None and not df.empty:
                 fig_cloud.add_vline(x=dt, line_width=1, line_dash="dot", line_color="lightgray")
         st.plotly_chart(fig_cloud, use_container_width=True)
         
-        fig_cloud_adj = px.line(df, x="datetime_local", y="cloud_adj", title="Cloud Adjustment Over Time", labels={"datetime_local": "Local Time", "cloud_adj": "Adjustment"})
-        fig_cloud_adj.update_traces(mode="lines+markers")
-        fig_cloud_adj.update_layout(height=300)
-        for dt in midnights:
-            if dt.hour == 0:
-                fig_cloud_adj.add_vline(x=dt, line_width=1, line_dash="dot", line_color="lightgray")
-        st.plotly_chart(fig_cloud_adj, use_container_width=True)
+        st.subheader("Cloud adjustment")
 
         # --- Model Curves for Multiple Apparent Temps ---
         cloud_range = np.linspace(0, 100, 300)
@@ -376,6 +377,55 @@ if df is not None and not df.empty:
         ax4.grid(True, linestyle="--", color="lightgray", linewidth=0.5)
         ax4.legend(ncol=3, fontsize="small", loc="upper right")
         st.pyplot(fig4)
+
+        fig_cloud_adj = px.line(df, x="datetime_local", y="cloud_adj", title="Cloud Adjustment Over Time (v1)", labels={"datetime_local": "Local Time", "cloud_adj": "Adjustment"})
+        fig_cloud_adj.update_traces(mode="lines+markers")
+        fig_cloud_adj.update_layout(height=300)
+        for dt in midnights:
+            if dt.hour == 0:
+                fig_cloud_adj.add_vline(x=dt, line_width=1, line_dash="dot", line_color="lightgray")
+        st.plotly_chart(fig_cloud_adj, use_container_width=True)
+
+        # # cloud adjustment (v2)
+
+        # st.subheader("Cloud adjustment (old)")
+
+        # # --- Model Curves for Multiple Apparent Temps ---
+        # cloud_range = np.linspace(0, 100, 300)
+        # cloud_temps = [45, 55,60, 65,70, 75, 85]
+        # cloud_colors = plt.cm.coolwarm(np.linspace(0, 1, len(cloud_temps)))
+
+        # fig4, ax4 = plt.subplots(figsize=PLOT_SIZE)
+
+        # for i, temp in enumerate(cloud_temps):
+        #     app_temp_array = np.full_like(cloud_range, temp)
+        #     curve = seasonal_cloud_adjustment_old(
+        #         cloud_range,
+        #         app_temp_array,
+        #         pd.to_datetime(df["date"].iloc[0]).date(),
+        #         latitude,
+        #         (current_defaults["cloud_params"][0], cloud_min, cloud_max, cloud_k)
+        #     )
+        #     ax4.plot(cloud_range, curve, color=cloud_colors[i], label=f"{temp}°F")
+
+        # # Plot forecast points
+        # ax4.scatter(df["cloud"], df["cloud_adj"], color="black", zorder=5, label="Forecast Points")
+
+        # ax4.set_xlabel("Cloud Cover (%)")
+        # ax4.set_ylabel("Cloud Adjustment")
+        # ax4.set_title("Cloud Adjustment Curves Across Apparent Temperatures (v2)")
+        # ax4.grid(True, linestyle="--", color="lightgray", linewidth=0.5)
+        # ax4.legend(ncol=3, fontsize="small", loc="upper right")
+        # st.pyplot(fig4)
+
+        # fig_cloud_adj = px.line(df, x="datetime_local", y="cloud_adj_v2", title="Cloud Adjustment Over Time (v1)", labels={"datetime_local": "Local Time", "cloud_adj": "Adjustment"})
+        # fig_cloud_adj.update_traces(mode="lines+markers")
+        # fig_cloud_adj.update_layout(height=300)
+        # for dt in midnights:
+        #     if dt.hour == 0:
+        #         fig_cloud_adj.add_vline(x=dt, line_width=1, line_dash="dot", line_color="lightgray")
+        # st.plotly_chart(fig_cloud_adj, use_container_width=True)
+
         
         # Only show shade adjustment for climbing activity
         if activity == "climbing":
@@ -536,14 +586,14 @@ if df is not None and not df.empty:
         st.write("**Sun Score:** Uses real cloud values")
         st.write("**Shade Score:** Assumes 100% cloud cover (i.e., no sun benefit)")
         
-        # Display sun score values in a table
-        st.write("**Sun Score Values:**")
-        score_table = pd.DataFrame({
-            "UTC Datetime": df["datetime"],
-            "Local Datetime": df["datetime_local"],
-            "Sun Score": df["score_sun"].round(1)
-        })
-        st.dataframe(score_table)
+        # # Display sun score values in a table
+        # st.write("**Sun Score Values:**")
+        # score_table = pd.DataFrame({
+        #     "UTC Datetime": df["datetime"],
+        #     "Local Datetime": df["datetime_local"],
+        #     "Sun Score": df["score_sun"].round(1)
+        # })
+        # st.dataframe(score_table)
 
         
 
@@ -592,13 +642,13 @@ if df is not None and not df.empty:
         st.pyplot(fig6, use_container_width=True)
         
         # Display sun score values in a table
-        st.write("**Sun Score Values:**")
-        score_table = pd.DataFrame({
-            "UTC Datetime": df["datetime"],
-            "Local Datetime": df["datetime_local"],
-            "Sun Score": df["score_sun"].round(1)
-        })
-        st.dataframe(score_table)
+        # st.write("**Sun Score Values:**")
+        # score_table = pd.DataFrame({
+        #     "UTC Datetime": df["datetime"],
+        #     "Local Datetime": df["datetime_local"],
+        #     "Sun Score": df["score_sun"].round(1)
+        # })
+        # st.dataframe(score_table)
 
 # --- Stoke Score Comparison Table ---
     st.subheader("Compare tuner to supabase data") 
